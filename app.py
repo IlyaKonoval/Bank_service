@@ -1,8 +1,7 @@
 import streamlit as st
 import altair as alt
 import os
-
-from eda import DataProcessor
+import pandas as pd
 
 def get_universal_data_path():
     """Возвращает универсальный путь к папке 'data'. """
@@ -19,8 +18,8 @@ def main():
     st.title("Анализ данных о клиентах банка")
 
     data_path = get_universal_data_path()
-    processor = DataProcessor(data_path)
-    df = processor.process_data()
+
+    df = pd.read_csv(os.path.join(data_path, "processed_data.csv"))
 
     # Выбор анализа
     analysis_type = st.sidebar.selectbox(
