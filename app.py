@@ -11,7 +11,7 @@ def get_universal_data_path():
     if env_data_path:
         return env_data_path
 
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def main():
