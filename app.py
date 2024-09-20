@@ -1,6 +1,5 @@
 import streamlit as st
-import matplotlib.pyplot as plt
-import seaborn as sns
+import altair as alt
 import os
 
 from eda import DataProcessor
@@ -59,33 +58,23 @@ def main():
         ]
         selected_feature = st.selectbox("Выберите признак:", numerical_features)
 
-        # Гистограмма
-        fig, ax = plt.subplots()
-        ax.hist(df[selected_feature], bins=20)
-        ax.set_title(f"Распределение {selected_feature}")
-        ax.set_xlabel(selected_feature)
-        ax.set_ylabel("Частота")
-        st.pyplot(fig)
+        # Гистограмма - используем st.bar_chart
+        st.bar_chart(df[selected_feature].value_counts().sort_index())
 
-        # Boxplot (ящик с усами)
-        fig, ax = plt.subplots()
-        ax.boxplot(df[selected_feature])
-        ax.set_title(f"Boxplot {selected_feature}")
-        ax.set_ylabel(selected_feature)
-        st.pyplot(fig)
+        # Boxplot (ящик с усами) - используем Altair
+        st.write("Boxplot:")
+        chart = alt.Chart(df).mark_boxplot().encode(
+            y=selected_feature
+        )
+        st.altair_chart(chart, use_container_width=True)
 
     elif analysis_type == "Категориальные признаки":
         st.header("Анализ категориальных признаков")
         categorical_features = ["GENDER", "SOCSTATUS_WORK_FL", "SOCSTATUS_PENS_FL"]
         selected_feature = st.selectbox("Выберите признак:", categorical_features)
 
-        # Столбчатая диаграмма
-        fig, ax = plt.subplots()
-        sns.countplot(x=selected_feature, data=df)
-        ax.set_title(f"Распределение {selected_feature}")
-        ax.set_xlabel(selected_feature)
-        ax.set_ylabel("Количество")
-        st.pyplot(fig)
+        # Столбчатая диаграмма - используем st.bar_chart
+        st.bar_chart(df[selected_feature].value_counts())
 
     elif analysis_type == "Корреляция":
         st.header("Анализ корреляции")
@@ -98,25 +87,45 @@ def main():
         else:
             corr_mat = df.corr(method="spearman")
 
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sns.heatmap(corr_mat, cmap="BuPu", annot=True, ax=ax)
-        ax.set_title(f"Матрица корреляции ({correlation_method})")
-        st.pyplot(fig)
+        # Heatmap (тепловая карта) - используем Altair
+        st.write(f"Матрица корреляции ({correlation_method}):")
+        chart = alt.Chart(corr_mat.reset_index()).mark_rect().encode(
+            x='index:O',
+            y='index:O',
+            color='value:Q'
+        )
+        st.altair_chart(chart, use_container_width=True)
 
     elif analysis_type == "Целевая переменная":
         st.header("Анализ целевой переменной (TARGET)")
 
-        # Столбчатая диаграмма распределения TARGET
-        fig, ax = plt.subplots()
-        sns.countplot(x="TARGET", data=df)
-        ax.set_title("Распределение целевой переменной (TARGET)")
-        ax.set_xlabel("TARGET")
-        ax.set_ylabel("Количество")
-        st.pyplot(fig)
+        # Столбчатая диаграмма распределения TARGET - используем st.bar_chart
+        st.bar_chart(df["TARGET"].value_counts())
 
         # Доля клиентов с TARGET=1
         target_rate = df["TARGET"].mean()
         st.write(f"Доля клиентов, давших отклик (TARGET=1): {target_rate:.2f}")
+
+        # Исследование связи с числовыми признаками
+        st.subheader("Связь с числовыми признаками:")
+        numerical_features = [
+            "AGE",
+            "PERSONAL_INCOME",
+            "CHILD_TOTAL",
+            "DEPENDANTS",
+            "LOAN_NUM_TOTAL",
+            "LOAN_NUM_CLOSED",
+        ]
+        selected_feature = st.selectbox("Выберите числовой признак:", numerical_features)
+
+        # Гистограммы для разных значений TARGET (с помощью st.bar_chart)
+        for target_value in df["TARGET"].unique():
+            st.write(f"**TARGET = {target_value}**")
+            st.bar_chart(
+                df[df["TARGET"] == target_value][selected_feature]
+                .value_counts()
+                .sort_index()
+            )
 
 
 if __name__ == "__main__":
