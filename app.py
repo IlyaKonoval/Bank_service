@@ -2,7 +2,7 @@ import streamlit as st
 import altair as alt
 import os
 import pandas as pd
-import joblib
+import joblib as jb
 import numpy as np
 
 # --- Функции ---
@@ -162,7 +162,7 @@ def main():
     model_path = os.path.join(
         data_path, "model.pkl"
     )  # Получаем путь к файлу с моделью
-    model = joblib.load(model_path)  # Загружаем модель
+    model = jb.load(model_path)  # Загружаем модель
 
     # --- Предобработка данных (обучение scaler) ---
     X = df.drop("TARGET", axis=1)
