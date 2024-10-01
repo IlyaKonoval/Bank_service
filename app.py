@@ -2,12 +2,10 @@ import streamlit as st
 import altair as alt
 import os
 import pandas as pd
-from sklearn.metrics import (
-    precision_score,
-    recall_score,
-    f1_score,
-    accuracy_score,
-)
+from sklearn.metrics import precision_score
+from sklearn.metrics import recall_score
+from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score
 import joblib
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
