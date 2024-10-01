@@ -2,11 +2,76 @@ import streamlit as st
 import altair as alt
 import os
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 import joblib
+import numpy as np
 
 # --- Функции ---
 
+class MyStandardScaler:
+    def __init__(self):
+        self.mean_ = None
+        self.std_ = None
+        self.feature_names_ = None
+
+    def fit(self, X):
+        """
+        Вычисляет среднее значение и стандартное отклонение для каждого признака.
+
+        Args:
+            X: DataFrame с обучающими данными.
+        """
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError("Input data must be a pandas DataFrame.")
+
+        self.mean_ = X.mean(axis=0)
+        self.std_ = X.std(axis=0)
+        self.feature_names_ = X.columns
+
+        # Проверка на нулевое стандартное отклонение
+        if np.any(self.std_ == 0):
+            raise ValueError(
+                "Standard deviation of one or more features is zero. "
+                "Cannot scale data."
+            )
+
+    def transform(self, X):
+        """
+        Масштабирует данные, используя вычисленные среднее значение
+        и стандартное отклонение, сохраняя названия столбцов.
+
+        Args:
+            X: DataFrame с данными для масштабирования.
+
+        Returns:
+            DataFrame с масштабированными данными.
+        """
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError("Input data must be a pandas DataFrame.")
+
+        if set(self.feature_names_) != set(X.columns):
+            raise ValueError("Input DataFrame must have the same columns as the fitted data.")
+
+        scaled_data = (X - self.mean_) / self.std_
+        return pd.DataFrame(scaled_data, columns=self.feature_names_)
+
+    def fit_transform(self, X):
+        """
+        Обучает scaler и масштабирует данные.
+        """
+        self.fit(X)
+        return self.transform(X)
+
+    def get_feature_names_out(self, input_features=None):
+        """
+        Возвращает названия признаков после масштабирования.
+
+        Args:
+            input_features: Не используется,  для совместимости с scikit-learn.
+
+        Returns:
+            np.ndarray: Массив с названиями признаков.
+        """
+        return self.feature_names_
 
 def get_universal_data_path():
     """
@@ -102,7 +167,7 @@ def main():
     # --- Предобработка данных (обучение scaler) ---
     X = df.drop("TARGET", axis=1)
     y = df["TARGET"]
-    scaler = StandardScaler()
+    scaler = MyStandardScaler()
     scaler.fit(X)  # Обучаем scaler на всех данных
 
     # --- Боковая панель для выбора анализа ---
