@@ -1,6 +1,6 @@
 import warnings
 
-import joblib
+import pickle
 from sklearn.exceptions import UndefinedMetricWarning
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
@@ -145,6 +145,18 @@ class MarketingCampaignModel:
         self.best_model = results[best_model_type]['model']
         print(f"Лучшая модель: {best_model_type}")
 
+    def predict_proba(self, X):
+        """
+        Возвращает вероятности предсказаний для каждого класса.
+
+        Args:
+            X: Данные для предсказания.
+
+        Returns:
+            Массив вероятностей.
+        """
+        return self.best_model.predict_proba(X)
+
     def save_model(self, model_path):
         """
         Сохраняет лучшую модель в файл.
@@ -152,8 +164,8 @@ class MarketingCampaignModel:
         Args:
             model_path: Путь к файлу для сохранения модели.
         """
-        joblib.dump(self.best_model, model_path)
-        print(f"Модель сохранена в файл: {model_path}")
+        with open('model.pkl', 'wb') as file:
+            pickle.dump(model, file)
     
     def predict(self, client_data):
         """

@@ -2,9 +2,9 @@ import streamlit as st
 import altair as alt
 import os
 import pandas as pd
-import joblib as jb
+import pickle
 import numpy as np
-
+from model import MarketingCampaignModel
 # --- Функции ---
 
 class MyStandardScaler:
@@ -162,7 +162,8 @@ def main():
     model_path = os.path.join(
         data_path, "model.pkl"
     )  # Получаем путь к файлу с моделью
-    model = jb.load(model_path)  # Загружаем модель
+    with open(model_path, 'rb') as file:
+        model = pickle.load(file) # Загружаем модель
 
     # --- Предобработка данных (обучение scaler) ---
     X = df.drop("TARGET", axis=1)
