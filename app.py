@@ -55,9 +55,11 @@ def main():
     )  # Получаем путь к файлу с моделью
     model = joblib.load(model_path)  # Загружаем модель
 
-    scaler = (
-        StandardScaler()
-    )  # Создаем объект для масштабирования данных (StandardScaler)
+    # --- Предобработка данных (обучение scaler) ---
+    X = df.drop("TARGET", axis=1)
+    y = df["TARGET"]
+    scaler = StandardScaler()
+    scaler.fit(X)  # Обучаем scaler на всех данных
 
     # --- Боковая панель для выбора анализа ---
     analysis_type = st.sidebar.selectbox(
@@ -209,9 +211,9 @@ def main():
 
         # Получение предсказаний на тестовых данных
         X_test = df.drop("TARGET", axis=1)  # Отделяем признаки от целевой переменной
-        X_test_scaled = scaler.fit_transform(
+        X_test_scaled = scaler.transform(
             X_test
-        )  # Масштабируем тестовые данные
+        )  # Масштабируем тестовые данные, используя обученный scaler
 
         # Проверка, поддерживает ли модель predict_proba
         if isinstance(model, SVC) and not hasattr(model, "predict_proba"):
@@ -242,44 +244,50 @@ def main():
     elif analysis_type == "Предсказание для клиента":
         st.header("Предсказание для клиента")
 
-        # --- Ввод данных клиента ---
-        age = st.number_input("Возраст:", min_value=0, max_value=100, value=30)
-        socstatus_work_fl = st.selectbox("Работает:", [0, 1])
-        socstatus_pens_fl = st.selectbox("Пенсионер:", [0, 1])
-        gender = st.selectbox("Пол (1 - мужчина, 0 - женщина):", [0, 1])
-        child_total = st.number_input("Количество детей:", min_value=0, value=0)
-        dependants = st.number_input("Количество иждивенцев:", min_value=0, value=0)
-        personal_income = st.number_input(
-            "Личный доход (руб.):", min_value=0, value=50000
-        )
-        loan_num_total = st.number_input("Количество ссуд:", min_value=0, value=0)
-        loan_num_closed = st.number_input(
-            "Количество погашенных ссуд:", min_value=0, value=0
-        )
+        # --- Форма для ввода данных ---
+        with st.form(key="client_form"):
+            age = st.number_input("Возраст:", min_value=0, max_value=100, value=30)
+            socstatus_work_fl = st.selectbox("Работает:", [0, 1])
+            socstatus_pens_fl = st.selectbox("Пенсионер:", [0, 1])
+            gender = st.selectbox("Пол (1 - мужчина, 0 - женщина):", [0, 1])
+            child_total = st.number_input("Количество детей:", min_value=0, value=0)
+            dependants = st.number_input("Количество иждивенцев:", min_value=0, value=0)
+            personal_income = st.number_input(
+                "Личный доход (руб.):", min_value=0, value=50000
+            )
+            loan_num_total = st.number_input("Количество ссуд:", min_value=0, value=0)
+            loan_num_closed = st.number_input(
+                "Количество погашенных ссуд:", min_value=0, value=0
+            )
+            submit_button = st.form_submit_button(label="Сделать предсказание")
 
-        # --- Создание DataFrame с данными клиента ---
-        client_data = pd.DataFrame(
-            {
-                "AGE": [age],
-                "SOCSTATUS_WORK_FL": [socstatus_work_fl],
-                "SOCSTATUS_PENS_FL": [socstatus_pens_fl],
-                "GENDER": [gender],
-                "CHILD_TOTAL": [child_total],
-                "DEPENDANTS": [dependants],
-                "PERSONAL_INCOME": [personal_income],
-                "LOAN_NUM_TOTAL": [loan_num_total],
-                "LOAN_NUM_CLOSED": [loan_num_closed],
-            }
-        )
+        # --- Предсказание при отправке формы ---
+        if submit_button:
+            # Создание DataFrame с данными клиента
+            client_data = pd.DataFrame(
+                {
+                    "AGE": [age],
+                    "SOCSTATUS_WORK_FL": [socstatus_work_fl],
+                    "SOCSTATUS_PENS_FL": [socstatus_pens_fl],
+                    "GENDER": [gender],
+                    "CHILD_TOTAL": [child_total],
+                    "DEPENDANTS": [dependants],
+                    "PERSONAL_INCOME": [personal_income],
+                    "LOAN_NUM_TOTAL": [loan_num_total],
+                    "LOAN_NUM_CLOSED": [loan_num_closed],
+                }
+            )
+            feature_names = scaler.get_feature_names_out()
+            client_data = client_data[feature_names]  # Переупорядочить столбцы
 
-        # --- Масштабирование данных клиента ---
-        client_data_scaled = scaler.fit_transform(client_data)
+            # Масштабирование данных клиента (используем обученный scaler)
+            client_data_scaled = scaler.transform(client_data)
 
-        # --- Предсказание вероятности отклика ---
-        prediction = model.predict_proba(client_data_scaled)[0, 1]
+            # Предсказание вероятности отклика
+            prediction = model.predict_proba(client_data_scaled)[0, 1]
 
-        # --- Вывод предсказания ---
-        st.write(f"Вероятность отклика на рекламу: {prediction:.3f}")
+            # Вывод предсказания
+            st.write(f"Вероятность отклика на рекламу: {prediction:.3f}")
 
 
 # --- Запуск приложения ---
