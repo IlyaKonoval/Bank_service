@@ -2,6 +2,7 @@ import streamlit as st
 import altair as alt
 import os
 import pandas as pd
+import sklearn
 from sklearn.metrics import (
     precision_score,
     recall_score,
