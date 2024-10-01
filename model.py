@@ -1,9 +1,4 @@
-import warnings
-
 import pickle
-from sklearn.exceptions import UndefinedMetricWarning
-
-warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
 import pandas as pd
 from sklearn.model_selection import train_test_split

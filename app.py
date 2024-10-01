@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import pickle
 import numpy as np
-from model import MarketingCampaignModel
+
 # --- Функции ---
 
 class MyStandardScaler:
@@ -159,11 +159,10 @@ def main():
         os.path.join(data_path, "processed_data.csv")
     )  # Загружаем данные из CSV файла
 
-    model_path = os.path.join(
-        data_path, "model.pkl"
-    )  # Получаем путь к файлу с моделью
+    data_path = get_universal_data_path()
+    model_path = os.path.join(data_path, "model.pkl")
     with open(model_path, 'rb') as file:
-        model = pickle.load(file) # Загружаем модель
+        loaded_model = pickle.load(file)
 
     # --- Предобработка данных (обучение scaler) ---
     X = df.drop("TARGET", axis=1)
@@ -300,8 +299,8 @@ def main():
         X_test_scaled = scaler.transform(X_test)
 
         # Проверка, поддерживает ли модель predict_proba
-        if hasattr(model, "predict_proba"):
-            test_predictions = model.predict_proba(X_test_scaled)[:, 1]
+        if hasattr(loaded_model, "predict_proba"):
+            test_predictions = loaded_model.predict_proba(X_test_scaled)[:, 1]
             test_predictions_binary = (test_predictions > threshold).astype(int)
 
             # Расчет метрик (используем функции calculate_)
@@ -365,7 +364,7 @@ def main():
             client_data_scaled = scaler.transform(client_data)
 
             # Предсказание вероятности отклика
-            prediction = model.predict_proba(client_data_scaled)[0, 1]
+            prediction = loaded_model.predict_proba(client_data_scaled)[0, 1]
 
             # Вывод предсказания
             st.write(f"Вероятность отклика на рекламу: {prediction:.3f}")
