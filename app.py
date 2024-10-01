@@ -2,14 +2,8 @@ import streamlit as st
 import altair as alt
 import os
 import pandas as pd
-from sklearn.metrics import precision_score
-from sklearn.metrics import recall_score
-from sklearn.metrics import f1_score
-from sklearn.metrics import accuracy_score
-import joblib
 from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
-
+import joblib
 
 # --- Функции ---
 
@@ -32,11 +26,63 @@ def get_universal_data_path():
     return os.path.dirname(os.path.abspath(__file__))
 
 
+def calculate_precision(y_true, y_predicted):
+    """
+    Рассчитывает precision.
+    """
+    true_positives = sum(
+        1 for true, pred in zip(y_true, y_predicted) if true == 1 and pred == 1
+    )
+    false_positives = sum(
+        1 for true, pred in zip(y_true, y_predicted) if true == 0 and pred == 1
+    )
+
+    if true_positives + false_positives == 0:
+        return 0
+    return true_positives / (true_positives + false_positives)
+
+
+def calculate_recall(y_true, y_predicted):
+    """
+    Рассчитывает recall.
+    """
+    true_positives = sum(
+        1 for true, pred in zip(y_true, y_predicted) if true == 1 and pred == 1
+    )
+    false_negatives = sum(
+        1 for true, pred in zip(y_true, y_predicted) if true == 1 and pred == 0
+    )
+
+    if true_positives + false_negatives == 0:
+        return 0
+    return true_positives / (true_positives + false_negatives)
+
+
+def calculate_f1_score(y_true, y_predicted):
+    """
+    Рассчитывает F1-меру.
+    """
+    precision = calculate_precision(y_true, y_predicted)
+    recall = calculate_recall(y_true, y_predicted)
+
+    if precision + recall == 0:
+        return 0
+    return 2 * (precision * recall) / (precision + recall)
+
+
+def calculate_accuracy(y_true, y_predicted):
+    """
+    Рассчитывает accuracy.
+    """
+    correct_predictions = sum(
+        1 for true, pred in zip(y_true, y_predicted) if true == pred
+    )
+    return correct_predictions / len(y_true)
+
+
 def main():
     """
     Основная функция приложения Streamlit.
-    Здесь происходит загрузка данных, модели,
-    выбор типа анализа и отображение результатов.
     """
 
     # --- Заголовок приложения ---
@@ -61,7 +107,7 @@ def main():
 
     # --- Боковая панель для выбора анализа ---
     analysis_type = st.sidebar.selectbox(
-        "Выберите тип анализа:",  # Текст над выпадающим списком
+        "Выберите тип анализа:",
         [
             "Обзор данных",
             "Числовые признаки",
@@ -70,29 +116,27 @@ def main():
             "Целевая переменная",
             "Результаты модели",
             "Предсказание для клиента",
-        ],  # Список доступных опций
+        ],
     )
 
     # --- Различные типы анализа ---
 
     # --- Обзор данных ---
     if analysis_type == "Обзор данных":
-        st.header("Обзор данных")  # Заголовок раздела
-        st.write(df.head())  # Вывод первых 5 строк DataFrame
-        st.write(df.describe())  # Вывод описательной статистики
+        st.header("Обзор данных")
+        st.write(df.head())
+        st.write(df.describe())
 
         # Дополнительная информация
         st.subheader("Дополнительные показатели:")
-        st.write(f"- Средний возраст: {df['AGE'].mean():.2f}")  # Средний возраст
-        st.write(
-            f"- Средний доход: {df['PERSONAL_INCOME'].mean():.2f}"
-        )  # Средний доход
+        st.write(f"- Средний возраст: {df['AGE'].mean():.2f}")
+        st.write(f"- Средний доход: {df['PERSONAL_INCOME'].mean():.2f}")
         st.write(
             f"- Доля работающих: {(df['SOCSTATUS_WORK_FL'] == 1).sum() / len(df):.2f}"
-        )  # Доля работающих
+        )
         st.write(
             f"- Доля пенсионеров: {(df['SOCSTATUS_PENS_FL'] == 1).sum() / len(df):.2f}"
-        )  # Доля пенсионеров
+        )
 
     # --- Анализ числовых признаков ---
     elif analysis_type == "Числовые признаки":
@@ -104,48 +148,32 @@ def main():
             "DEPENDANTS",
             "LOAN_NUM_TOTAL",
             "LOAN_NUM_CLOSED",
-        ]  # Список числовых признаков
-        selected_feature = st.selectbox(
-            "Выберите признак:", numerical_features
-        )  # Выбор признака из списка
+        ]
+        selected_feature = st.selectbox("Выберите признак:", numerical_features)
 
         # Гистограмма
-        st.bar_chart(
-            df[selected_feature].value_counts().sort_index()
-        )  # Построение гистограммы
+        st.bar_chart(df[selected_feature].value_counts().sort_index())
 
         # Boxplot (ящик с усами)
         st.write("Boxplot:")
-        chart = (
-            alt.Chart(df)
-            .mark_boxplot()
-            .encode(y=selected_feature)  # Построение boxplot с помощью Altair
-        )
-        st.altair_chart(chart, use_container_width=True)  # Отображение графика
+        chart = alt.Chart(df).mark_boxplot().encode(y=selected_feature)
+        st.altair_chart(chart, use_container_width=True)
 
     # --- Анализ категориальных признаков ---
     elif analysis_type == "Категориальные признаки":
         st.header("Анализ категориальных признаков")
-        categorical_features = [
-            "GENDER",
-            "SOCSTATUS_WORK_FL",
-            "SOCSTATUS_PENS_FL",
-        ]  # Список категориальных признаков
-        selected_feature = st.selectbox(
-            "Выберите признак:", categorical_features
-        )  # Выбор признака из списка
+        categorical_features = ["GENDER", "SOCSTATUS_WORK_FL", "SOCSTATUS_PENS_FL"]
+        selected_feature = st.selectbox("Выберите признак:", categorical_features)
 
         # Столбчатая диаграмма
-        st.bar_chart(
-            df[selected_feature].value_counts()
-        )  # Построение столбчатой диаграммы
+        st.bar_chart(df[selected_feature].value_counts())
 
     # --- Анализ корреляции ---
     elif analysis_type == "Корреляция":
         st.header("Анализ корреляции")
         correlation_method = st.radio(
             "Выберите метод корреляции:", ["Пирсон", "Спирмен"]
-        )  # Выбор метода корреляции
+        )
 
         # Расчет матрицы корреляции
         if correlation_method == "Пирсон":
@@ -158,11 +186,9 @@ def main():
         chart = (
             alt.Chart(corr_mat.reset_index())
             .mark_rect()
-            .encode(
-                x="index:O", y="index:O", color="value:Q"
-            )  # Построение heatmap с помощью Altair
+            .encode(x="index:O", y="index:O", color="value:Q")
         )
-        st.altair_chart(chart, use_container_width=True)  # Отображение графика
+        st.altair_chart(chart, use_container_width=True)
 
     # --- Анализ целевой переменной ---
     elif analysis_type == "Целевая переменная":
@@ -184,10 +210,8 @@ def main():
             "DEPENDANTS",
             "LOAN_NUM_TOTAL",
             "LOAN_NUM_CLOSED",
-        ]  # Список числовых признаков
-        selected_feature = st.selectbox(
-            "Выберите числовой признак:", numerical_features
-        )  # Выбор признака из списка
+        ]
+        selected_feature = st.selectbox("Выберите числовой признак:", numerical_features)
 
         # Гистограммы для разных значений TARGET
         for target_value in df["TARGET"].unique():
@@ -196,47 +220,39 @@ def main():
                 df[df["TARGET"] == target_value][selected_feature]
                 .value_counts()
                 .sort_index()
-            )  # Построение гистограммы
+            )
 
     # --- Результаты модели ---
     elif analysis_type == "Результаты модели":
         st.header("Результаты модели")
 
         # Выбор порога
-        threshold = st.slider(
-            "Выберите порог:", 0.0, 1.0, 0.5, 0.01
-        )  # Ползунок для выбора порога
+        threshold = st.slider("Выберите порог:", 0.0, 1.0, 0.5, 0.01)
 
         # Получение предсказаний на тестовых данных
-        X_test = df.drop("TARGET", axis=1)  # Отделяем признаки от целевой переменной
-        X_test_scaled = scaler.transform(
-            X_test
-        )  # Масштабируем тестовые данные, используя обученный scaler
+        X_test = df.drop("TARGET", axis=1)
+        X_test_scaled = scaler.transform(X_test)
 
         # Проверка, поддерживает ли модель predict_proba
-        if isinstance(model, SVC) and not hasattr(model, "predict_proba"):
-            st.warning(
-                "Выбранная модель SVM не поддерживает predict_proba. "
-                "Для визуализации метрик в зависимости от порога "
-                "необходимо переобучить модель с параметром probability=True."
-            )
-        else:
-            # Получение вероятностей предсказаний
+        if hasattr(model, "predict_proba"):
             test_predictions = model.predict_proba(X_test_scaled)[:, 1]
-            # Преобразование вероятностей в бинарные предсказания по порогу
             test_predictions_binary = (test_predictions > threshold).astype(int)
 
-            # Расчет метрик
-            precision = precision_score(df["TARGET"], test_predictions_binary)
-            recall = recall_score(df["TARGET"], test_predictions_binary)
-            f1 = f1_score(df["TARGET"], test_predictions_binary)
-            accuracy = accuracy_score(df["TARGET"], test_predictions_binary)
+            # Расчет метрик (используем функции calculate_)
+            precision = calculate_precision(df["TARGET"], test_predictions_binary)
+            recall = calculate_recall(df["TARGET"], test_predictions_binary)
+            f1 = calculate_f1_score(df["TARGET"], test_predictions_binary)
+            accuracy = calculate_accuracy(df["TARGET"], test_predictions_binary)
 
-            # Вывод метрик
             st.write(f"Precision: {precision:.3f}")
             st.write(f"Recall: {recall:.3f}")
             st.write(f"F1-мера: {f1:.3f}")
             st.write(f"Accuracy: {accuracy:.3f}")
+        else:
+            st.warning(
+                "Выбранная модель не поддерживает predict_proba. "
+                "Невозможно рассчитать метрики."
+            )
 
     # --- Предсказание для клиента ---
     elif analysis_type == "Предсказание для клиента":
@@ -275,6 +291,7 @@ def main():
                     "LOAN_NUM_CLOSED": [loan_num_closed],
                 }
             )
+
             feature_names = scaler.get_feature_names_out()
             client_data = client_data[feature_names]  # Переупорядочить столбцы
 
