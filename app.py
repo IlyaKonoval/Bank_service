@@ -161,8 +161,9 @@ def main():
 
     data_path = get_universal_data_path()
     model_path = os.path.join(data_path, "model.pkl")
-    with open(model_path, 'rb') as file:
-        loaded_model = pickle.load(file)
+    if os.path.exists(model_path):
+        with open(model_path, 'rb') as file:
+            loaded_model = pickle.load(file)
 
     # --- Предобработка данных (обучение scaler) ---
     X = df.drop("TARGET", axis=1)
