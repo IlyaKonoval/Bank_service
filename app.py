@@ -30,6 +30,7 @@ def load_model(model_path):
     if os.path.exists(model_path):
         with open(model_path, 'rb') as file:
             loaded_data = pickle.load(file)
+            # Убедитесь, что 'feature_order' - это ключ словаря
             return loaded_data.get("model"), loaded_data.get("feature_order")
     else:
         st.warning("Модель не найдена.")

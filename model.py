@@ -98,7 +98,7 @@ def train_and_evaluate_model(model_type, X_train, y_train, X_val, y_val, X_test,
 def save_model(model_data, model_path="model.pkl"):
     """Сохраняет словарь с данными модели (включая модель и порядок признаков)."""
     with open(model_path, "wb") as file:
-        pickle.dump(model_data, file)
+        pickle.dump(model_data, file)  # Сохраняем весь словарь model_data
 
 def load_model(model_path="model.pkl"):
     """Загружает модель из заданного пути."""
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
 
     # Обучение и оценка модели
-    model_type = "lr"
+    model_type = "lr"  # или "svm", "dt"
     results = train_and_evaluate_model(model_type, X_train, y_train, X_val, y_val, X_test, y_test)
 
     # Вывод результатов
