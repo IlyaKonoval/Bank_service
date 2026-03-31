@@ -1,179 +1,247 @@
 import streamlit as st
 import altair as alt
 import os
-import pandas as pd
 import pickle
-import numpy as np
-from model import (
-    fit_scaler,
-    transform_scaler,
-    calculate_precision,
-    calculate_recall,
-    calculate_f1_score,
-    calculate_accuracy,
-)
-
-# --- Функции ---
-
-def get_universal_data_path():
-    """
-    Возвращает универсальный путь к папке 'data'.
-    """
-    env_data_path = os.environ.get("DATA_PATH")
-    if env_data_path:
-        return env_data_path
-    return os.path.dirname(os.path.abspath(__file__))
+import pandas as pd
+from pathlib import Path
 
 
-def load_model(model_path):
-    """Загружает модель и порядок признаков из заданного пути."""
-    if os.path.exists(model_path):
-        with open(model_path, 'rb') as file:
-            loaded_data = pickle.load(file)
-            # Убедитесь, что 'feature_order' - это ключ словаря
-            return loaded_data.get("model"), loaded_data.get("feature_order")
-    else:
-        st.warning("Модель не найдена.")
-        return None, None
+def get_base_path():
+    env_path = os.environ.get("DATA_PATH")
+    if env_path:
+        return Path(env_path)
+    return Path(os.path.dirname(os.path.abspath(__file__)))
 
 
-def predict_for_client(client_data, loaded_model, mean_, std_, feature_order):
-    """
-    Выполняет предсказание для клиента на основе его данных.
-    """
-    client_data = client_data[feature_order]
+def load_artifacts(artifacts_path):
+    if artifacts_path.exists():
+        with open(artifacts_path, "rb") as f:
+            return pickle.load(f)
+    return None
 
-    # Масштабируем данные
-    client_data_scaled = transform_scaler(client_data, mean_, std_)
 
-    # Выполняем предсказание
-    prediction = loaded_model.predict_proba(client_data_scaled)[0, 1]
-    return prediction
+def predict_client(client_data, artifact):
+    fe = artifact["feature_engineer"]
+    model = artifact["model"]
+    threshold = artifact["optimal_threshold"]
+
+    client_fe = fe.transform(client_data)
+    proba = model.predict_proba(client_fe)[0, 1]
+    prediction = int(proba >= threshold)
+    return proba, prediction
 
 
 def main():
-    """
-    Основная функция приложения Streamlit.
-    """
+    st.set_page_config(page_title="Bank Marketing Prediction", layout="wide")
+    st.title("Анализ данных клиентов банка и предсказание отклика")
 
-    # --- Заголовок приложения ---
-    st.title("Анализ данных о клиентах банка и предсказание отклика")
+    base_path = get_base_path()
+    df = pd.read_csv(base_path / "processed_data.csv")
 
-    # --- Загрузка данных и модели ---
-    data_path = get_universal_data_path()
-    df = pd.read_csv(os.path.join(data_path, "processed_data.csv"))  # Загружаем данные
+    artifacts_path = base_path / "artifacts" / "model.pkl"
+    artifact = load_artifacts(artifacts_path)
 
-    model_path = os.path.join(data_path, "model.pkl")
-    loaded_model, feature_order = load_model(model_path)
-
-    # --- Предобработка данных (обучение scaler) ---
-    X = df.drop("TARGET", axis=1)
-    y = df["TARGET"]
-    mean_, std_ = fit_scaler(X)  # Обучаем scaler
-
-    # --- Боковая панель для выбора анализа ---
     analysis_type = st.sidebar.selectbox(
-        "Выберите тип анализа:",
+        "Раздел:",
         [
             "Обзор данных",
             "Числовые признаки",
             "Категориальные признаки",
             "Корреляция",
             "Целевая переменная",
-            "Результаты модели",
+            "Сравнение моделей",
+            "Результаты лучшей модели",
+            "SHAP анализ",
             "Предсказание для клиента",
         ],
     )
 
-    # --- Различные типы анализа ---
-
     if analysis_type == "Обзор данных":
         st.header("Обзор данных")
-        st.write(df.head())
-        st.write(df.describe())
+        st.dataframe(df.head(20))
+        st.subheader("Статистика")
+        st.dataframe(df.describe())
+        st.write(f"Размер датасета: {df.shape[0]} строк, {df.shape[1]} колонок")
+        st.write(f"Доля отклика (TARGET=1): {df['TARGET'].mean():.2%}")
 
     elif analysis_type == "Числовые признаки":
         st.header("Анализ числовых признаков")
         numerical_features = [
-            "AGE", "PERSONAL_INCOME", "CHILD_TOTAL", "DEPENDANTS", "LOAN_NUM_TOTAL", "LOAN_NUM_CLOSED"
+            "AGE", "PERSONAL_INCOME", "CHILD_TOTAL", "DEPENDANTS",
+            "LOAN_NUM_TOTAL", "LOAN_NUM_CLOSED",
         ]
-        selected_feature = st.selectbox("Выберите признак:", numerical_features)
-        st.bar_chart(df[selected_feature].value_counts().sort_index())
+        selected = st.selectbox("Признак:", numerical_features)
 
-        chart = alt.Chart(df).mark_boxplot().encode(y=selected_feature)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Распределение")
+            st.bar_chart(df[selected].value_counts().sort_index())
+        with col2:
+            st.subheader("Box Plot")
+            chart = alt.Chart(df).mark_boxplot().encode(y=selected)
+            st.altair_chart(chart, use_container_width=True)
+
+        st.subheader("Распределение по TARGET")
+        chart = alt.Chart(df).mark_bar(opacity=0.7).encode(
+            x=alt.X(selected, bin=alt.Bin(maxbins=30)),
+            y="count()",
+            color="TARGET:N",
+        )
         st.altair_chart(chart, use_container_width=True)
 
     elif analysis_type == "Категориальные признаки":
         st.header("Анализ категориальных признаков")
         categorical_features = ["GENDER", "SOCSTATUS_WORK_FL", "SOCSTATUS_PENS_FL"]
-        selected_feature = st.selectbox("Выберите признак:", categorical_features)
-        st.bar_chart(df[selected_feature].value_counts())
+        selected = st.selectbox("Признак:", categorical_features)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.bar_chart(df[selected].value_counts())
+        with col2:
+            target_rate = df.groupby(selected)["TARGET"].mean()
+            st.bar_chart(target_rate)
+            st.caption("Доля отклика по группам")
 
     elif analysis_type == "Корреляция":
-        st.header("Анализ корреляции")
-        correlation_method = st.radio("Выберите метод корреляции:", ["Пирсон", "Спирмен"])
-        corr_mat = df.corr() if correlation_method == "Пирсон" else df.corr(method="spearman")
-        st.write(f"Матрица корреляции ({correlation_method}):")
-        chart = alt.Chart(corr_mat.reset_index()).mark_rect().encode(x="index:O", y="index:O", color="value:Q")
-        st.altair_chart(chart, use_container_width=True)
+        st.header("Матрица корреляции")
+        method = st.radio("Метод:", ["pearson", "spearman"])
+        corr = df.corr(method=method)
+
+        base = alt.Chart(
+            corr.reset_index().melt("index")
+        ).encode(
+            x=alt.X("index:N", title=""),
+            y=alt.Y("variable:N", title=""),
+        )
+
+        heatmap = base.mark_rect().encode(
+            color=alt.Color("value:Q", scale=alt.Scale(scheme="blueorange", domain=[-1, 1]))
+        )
+        text = base.mark_text(fontSize=10).encode(
+            text=alt.Text("value:Q", format=".2f"),
+        )
+        st.altair_chart(heatmap + text, use_container_width=True)
 
     elif analysis_type == "Целевая переменная":
-        st.header("Анализ целевой переменной (TARGET)")
-        st.bar_chart(df["TARGET"].value_counts())
-        target_rate = df["TARGET"].mean()
-        st.write(f"Доля клиентов, давших отклик (TARGET=1): {target_rate:.2f}")
+        st.header("Распределение TARGET")
+        counts = df["TARGET"].value_counts()
+        st.bar_chart(counts)
+        st.metric("Доля отклика", f"{df['TARGET'].mean():.2%}")
+        st.metric("Всего клиентов", f"{len(df):,}")
+        st.metric("Откликнулись", f"{counts.get(1, 0):,}")
 
-    elif analysis_type == "Результаты модели":
-        st.header("Результаты модели")
-        threshold = st.slider("Выберите порог:", 0.0, 1.0, 0.5, 0.01)
-        X_test = df.drop("TARGET", axis=1)
-        X_test_scaled = transform_scaler(X_test, mean_, std_)
+    elif analysis_type == "Сравнение моделей":
+        st.header("Сравнение моделей")
+        if artifact and "all_results" in artifact:
+            results_df = pd.DataFrame([
+                {"Model": name, **metrics}
+                for name, metrics in artifact["all_results"].items()
+            ]).sort_values("f1", ascending=False)
 
-        if loaded_model and hasattr(loaded_model, "predict_proba"):
-            test_predictions = loaded_model.predict_proba(X_test_scaled)[:, 1]
-            test_predictions_binary = (test_predictions > threshold).astype(int)
+            st.dataframe(results_df.style.highlight_max(
+                subset=["f1", "roc_auc", "precision", "recall", "accuracy", "pr_auc"],
+                color="#90EE90",
+            ))
 
-            precision = calculate_precision(df["TARGET"], test_predictions_binary)
-            recall = calculate_recall(df["TARGET"], test_predictions_binary)
-            f1 = calculate_f1_score(df["TARGET"], test_predictions_binary)
-            accuracy = calculate_accuracy(df["TARGET"], test_predictions_binary)
+            chart = alt.Chart(results_df.melt("Model", var_name="Metric", value_name="Score")).mark_bar().encode(
+                x=alt.X("Model:N", sort="-y"),
+                y="Score:Q",
+                color="Metric:N",
+                column="Metric:N",
+            ).properties(width=120, height=300)
+            st.altair_chart(chart)
 
-            st.write(f"Precision: {precision:.3f}")
-            st.write(f"Recall: {recall:.3f}")
-            st.write(f"F1-мера: {f1:.3f}")
-            st.write(f"Accuracy: {accuracy:.3f}")
+            comparison_img = base_path / "artifacts" / "model_comparison.png"
+            if comparison_img.exists():
+                st.image(str(comparison_img))
         else:
-            st.warning("Модель не загружена или не поддерживает predict_proba.")
+            st.warning("Запустите train.py для обучения моделей")
+
+    elif analysis_type == "Результаты лучшей модели":
+        st.header("Лучшая модель")
+        if artifact:
+            st.subheader(f"Модель: {artifact['best_model_name']}")
+
+            metrics = artifact["test_metrics"]
+            cols = st.columns(6)
+            metric_names = ["accuracy", "precision", "recall", "f1", "roc_auc", "pr_auc"]
+            for i, name in enumerate(metric_names):
+                cols[i].metric(name.upper(), f"{metrics[name]:.3f}")
+
+            st.subheader(f"Оптимальный порог: {artifact['optimal_threshold']:.2f}")
+
+            for suffix in ["_roc_curve.png", "_pr_curve.png", "_confusion_matrix.png"]:
+                img_path = base_path / "artifacts" / f"{artifact['best_model_name']}{suffix}"
+                if img_path.exists():
+                    st.image(str(img_path))
+        else:
+            st.warning("Запустите train.py для обучения моделей")
+
+    elif analysis_type == "SHAP анализ":
+        st.header("SHAP — интерпретация модели")
+        if artifact:
+            for suffix in ["_shap_summary.png", "_shap_importance.png"]:
+                img_path = base_path / "artifacts" / f"{artifact['best_model_name']}{suffix}"
+                if img_path.exists():
+                    st.image(str(img_path))
+                else:
+                    st.info(f"Файл {img_path.name} не найден")
+        else:
+            st.warning("Запустите train.py для обучения моделей")
 
     elif analysis_type == "Предсказание для клиента":
         st.header("Предсказание для клиента")
+        if not artifact:
+            st.warning("Запустите train.py для обучения моделей")
+            return
+
         with st.form(key="client_form"):
-            age = st.number_input("Возраст:", min_value=0, max_value=100, value=30)
-            socstatus_work_fl = st.selectbox("Работает:", [0, 1])
-            socstatus_pens_fl = st.selectbox("Пенсионер:", [0, 1])
-            gender = st.selectbox("Пол (1 - мужчина, 0 - женщина):", [0, 1])
-            child_total = st.number_input("Количество детей:", min_value=0, value=0)
-            dependants = st.number_input("Количество иждивенцев:", min_value=0, value=0)
-            personal_income = st.number_input("Личный доход (руб.):", min_value=0, value=50000)
-            loan_num_total = st.number_input("Количество ссуд:", min_value=0, value=0)
-            loan_num_closed = st.number_input("Количество погашенных ссуд:", min_value=0, value=0)
-            submit_button = st.form_submit_button(label="Сделать предсказание")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                age = st.number_input("Возраст:", min_value=18, max_value=80, value=35)
+                gender = st.selectbox("Пол:", [("Мужской", 1), ("Женский", 0)], format_func=lambda x: x[0])
+                child_total = st.number_input("Кол-во детей:", min_value=0, max_value=10, value=0)
+            with col2:
+                dependants = st.number_input("Кол-во иждивенцев:", min_value=0, max_value=10, value=0)
+                personal_income = st.number_input("Доход (руб.):", min_value=5000, max_value=500000, value=50000)
+                socstatus_work = st.selectbox("Работает:", [("Да", 1), ("Нет", 0)], format_func=lambda x: x[0])
+            with col3:
+                socstatus_pens = st.selectbox("Пенсионер:", [("Нет", 0), ("Да", 1)], format_func=lambda x: x[0])
+                loan_total = st.number_input("Кол-во ссуд:", min_value=0, max_value=20, value=1)
+                loan_closed = st.number_input("Погашенных ссуд:", min_value=0, max_value=20, value=0)
 
-        if submit_button and loaded_model:
-            client_data = pd.DataFrame({
-                "AGE": [age],
-                "SOCSTATUS_WORK_FL": [socstatus_work_fl],
-                "SOCSTATUS_PENS_FL": [socstatus_pens_fl],
-                "GENDER": [gender],
-                "CHILD_TOTAL": [child_total],
-                "DEPENDANTS": [dependants],
-                "PERSONAL_INCOME": [personal_income],
-                "LOAN_NUM_TOTAL": [loan_num_total],
-                "LOAN_NUM_CLOSED": [loan_num_closed],
-            })
+            submit = st.form_submit_button("Предсказать")
 
-            prediction = predict_for_client(client_data, loaded_model, mean_, std_, feature_order)
-            st.write(f"Вероятность отклика на рекламу: {prediction:.3f}")
+        if submit:
+            if loan_closed > loan_total:
+                st.error("Погашенных ссуд не может быть больше общего количества")
+                return
+
+            client_data = pd.DataFrame([{
+                "AGE": age,
+                "GENDER": gender[1],
+                "CHILD_TOTAL": child_total,
+                "DEPENDANTS": dependants,
+                "PERSONAL_INCOME": float(personal_income),
+                "SOCSTATUS_WORK_FL": socstatus_work[1],
+                "SOCSTATUS_PENS_FL": socstatus_pens[1],
+                "LOAN_NUM_TOTAL": loan_total,
+                "LOAN_NUM_CLOSED": float(loan_closed),
+            }])
+
+            proba, prediction = predict_client(client_data, artifact)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Вероятность отклика", f"{proba:.1%}")
+            with col2:
+                if prediction == 1:
+                    st.success("Клиент ОТКЛИКНЕТСЯ на кампанию")
+                else:
+                    st.error("Клиент НЕ откликнется на кампанию")
+
+            st.progress(float(proba))
+
 
 if __name__ == "__main__":
     main()

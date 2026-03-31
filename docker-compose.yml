@@ -1,0 +1,10 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./artifacts:/app/artifacts
+    environment:
+      - DATA_PATH=/app
+    restart: unless-stopped

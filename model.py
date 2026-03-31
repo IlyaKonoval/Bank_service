@@ -35,14 +35,14 @@ def transform_scaler(X, mean_, std_):
 
 def find_best_threshold(model, X_val, y_val):
     val_predictions = model.predict_proba(X_val)[:, 1]
-    best_threshold, best_precision, best_recall = 0, 0, 0
+    best_threshold, best_precision = 0, 0
     for threshold in range(0, 101, 1):
         threshold /= 100
         val_predictions_binary = (val_predictions > threshold).astype(int)
         precision = precision_score(y_val, val_predictions_binary)
         recall = recall_score(y_val, val_predictions_binary)
         if recall >= 0.66 and precision > best_precision:
-            best_threshold, best_precision, best_recall = threshold, precision, recall
+            best_threshold, best_precision = threshold, precision
     return best_threshold
 
 
