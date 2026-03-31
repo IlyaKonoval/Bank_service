@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN python train.py
+RUN mkdir -p artifacts && python train.py
 
 EXPOSE 8501
 
